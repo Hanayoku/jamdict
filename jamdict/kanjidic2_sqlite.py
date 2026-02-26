@@ -12,24 +12,37 @@ References:
 # :copyright: (c) 2017 Le Tuan Anh <tuananh.ke@gmail.com>
 # :license: MIT, see LICENSE for more details.
 
-import os
 import logging
+import os
+
 from puchikarui import Schema
-from . import __version__ as JAMDICT_VERSION, __url__ as JAMDICT_URL
+
+from . import __url__ as JAMDICT_URL
+from . import __version__ as JAMDICT_VERSION
 from .jmdict import Meta
-from .kanjidic2 import Character, CodePoint, Radical, Variant, DicRef, QueryCode, RMGroup, Reading, Meaning
+from .kanjidic2 import (
+    Character,
+    CodePoint,
+    DicRef,
+    Meaning,
+    QueryCode,
+    Radical,
+    Reading,
+    RMGroup,
+    Variant,
+)
 
 # ------------------------------------------------------------------------------
 # Configuration
 # ------------------------------------------------------------------------------
 
 MY_FOLDER = os.path.dirname(os.path.abspath(__file__))
-SCRIPT_FOLDER = os.path.join(MY_FOLDER, 'data')
-KANJIDIC2_VERSION = '1.6'
-KANJIDIC2_URL = 'https://www.edrdg.org/wiki/index.php/KANJIDIC_Project'
-KANJIDIC2_DATE = 'April 2008'
-KANJIDIC2_SETUP_FILE = os.path.join(SCRIPT_FOLDER, 'setup_kanjidic2.sql')
-KANJIDIC2_SETUP_SCRIPT = '''
+SCRIPT_FOLDER = os.path.join(MY_FOLDER, "data")
+KANJIDIC2_VERSION = "1.6"
+KANJIDIC2_URL = "https://www.edrdg.org/wiki/index.php/KANJIDIC_Project"
+KANJIDIC2_DATE = "April 2008"
+KANJIDIC2_SETUP_FILE = os.path.join(SCRIPT_FOLDER, "setup_kanjidic2.sql")
+KANJIDIC2_SETUP_SCRIPT = """
 INSERT INTO meta VALUES ('kanjidic2.version', '{kdv}');
 INSERT INTO meta VALUES ('kanjidic2.url', '{kdu}');
 INSERT INTO meta VALUES ('kanjidic2.date', '{kdd}');
@@ -38,12 +51,12 @@ WHERE NOT EXISTS (SELECT 1 FROM meta WHERE key='generator');
 INSERT INTO meta SELECT 'generator_version', '{gv}'
 WHERE NOT EXISTS (SELECT 1 FROM meta WHERE key='generator_version');
 INSERT INTO meta SELECT 'generator_url', '{gu}'
-WHERE NOT EXISTS (SELECT 1 FROM meta WHERE key='generator_url');'''.format(
+WHERE NOT EXISTS (SELECT 1 FROM meta WHERE key='generator_url');""".format(
     kdv=KANJIDIC2_VERSION,
     kdu=KANJIDIC2_URL,
     kdd=KANJIDIC2_DATE,
     gv=JAMDICT_VERSION,
-    gu=JAMDICT_URL
+    gu=JAMDICT_URL,
 )
 
 
@@ -55,42 +68,58 @@ def getLogger():
 # Models
 # ------------------------------------------------------------------------------
 
-class KanjiDic2Schema(Schema):
 
-    KEY_FILE_VER = 'kanjidic2.file_version'
-    KEY_DB_VER = 'kanjidic2.database_version'
-    KEY_CREATED_DATE = 'kanjidic2.date_of_creation'
+class KanjiDic2Schema(Schema):
+    KEY_FILE_VER = "kanjidic2.file_version"
+    KEY_DB_VER = "kanjidic2.database_version"
+    KEY_CREATED_DATE = "kanjidic2.date_of_creation"
 
     def __init__(self, db_path, *args, **kwargs):
         super().__init__(db_path, *args, **kwargs)
         self.add_file(KANJIDIC2_SETUP_FILE)
         self.add_script(KANJIDIC2_SETUP_SCRIPT)
         # Meta
-        self.add_table('meta', ['key', 'value'], proto=Meta).set_id('key')
-        self.add_table('character', ['ID', 'literal', 'stroke_count', 'grade', 'freq', 'jlpt'], proto=Character, alias="char").set_id('ID')
-        self.add_table('codepoint', ['cid', 'cp_type', 'value'], proto=CodePoint)
-        self.add_table('radical', ['cid', 'rad_type', 'value'], proto=Radical)
-        self.add_table('stroke_miscount', ['cid', 'value'], alias="smc")
-        self.add_table('variant', ['cid', 'var_type', 'value'], proto=Variant)
-        self.add_table('rad_name', ['cid', 'value'])
-        self.add_table('dic_ref', ['cid', 'dr_type', 'value', 'm_vol', 'm_page'], proto=DicRef)
-        self.add_table('query_code', ['cid', 'qc_type', 'value', 'skip_misclass'], proto=QueryCode)
-        self.add_table('nanori', ['cid', 'value'])
-        self.add_table('rm_group', ['ID', 'cid'], proto=RMGroup, alias='rmg').set_id('ID')
-        self.add_table('reading', ['gid', 'r_type', 'value', 'on_type', 'r_status'], proto=Reading)
-        self.add_table('meaning', ['gid', 'value', 'm_lang'], proto=Meaning)
+        self.add_table("meta", ["key", "value"], proto=Meta).set_id("key")
+        self.add_table(
+            "character",
+            ["ID", "literal", "stroke_count", "grade", "freq", "jlpt"],
+            proto=Character,
+            alias="char",
+        ).set_id("ID")
+        self.add_table("codepoint", ["cid", "cp_type", "value"], proto=CodePoint)
+        self.add_table("radical", ["cid", "rad_type", "value"], proto=Radical)
+        self.add_table("stroke_miscount", ["cid", "value"], alias="smc")
+        self.add_table("variant", ["cid", "var_type", "value"], proto=Variant)
+        self.add_table("rad_name", ["cid", "value"])
+        self.add_table(
+            "dic_ref", ["cid", "dr_type", "value", "m_vol", "m_page"], proto=DicRef
+        )
+        self.add_table(
+            "query_code", ["cid", "qc_type", "value", "skip_misclass"], proto=QueryCode
+        )
+        self.add_table("nanori", ["cid", "value"])
+        self.add_table("rm_group", ["ID", "cid"], proto=RMGroup, alias="rmg").set_id(
+            "ID"
+        )
+        self.add_table(
+            "reading", ["gid", "r_type", "value", "on_type", "r_status"], proto=Reading
+        )
+        self.add_table("meaning", ["gid", "value", "m_lang"], proto=Meaning)
 
 
 class KanjiDic2SQLite(KanjiDic2Schema):
-
     def __init__(self, db_path, *args, **kwargs):
         super().__init__(db_path, *args, **kwargs)
 
-    def update_kd2_meta(self, file_version, database_version, date_of_creation, ctx=None):
+    def update_kd2_meta(
+        self, file_version, database_version, date_of_creation, ctx=None
+    ):
         # ensure context
         if ctx is None:
             with self.ctx() as new_context:
-                return self.update_kd2_meta(file_version, database_version, date_of_creation, new_context)
+                return self.update_kd2_meta(
+                    file_version, database_version, date_of_creation, new_context
+                )
         # else
         # file_version
         fv = ctx.meta.by_id(self.KEY_FILE_VER)
@@ -186,7 +215,7 @@ class KanjiDic2SQLite(KanjiDic2Schema):
             with self.ctx() as ctx:
                 return self.get_char(literal, ctx=ctx)
         # context was ensured
-        c = ctx.char.select_single('literal=?', (literal,))
+        c = ctx.char.select_single("literal=?", (literal,))
         if not c:
             getLogger().debug("character {} could not be found".format(literal))
             return None
@@ -199,19 +228,19 @@ class KanjiDic2SQLite(KanjiDic2Schema):
                 return self.select_char(cid, ctx=ctx)
         # context was ensured
         c = ctx.char.by_id(cid)
-        c.codepoints = ctx.codepoint.select('cid=?', (cid,))
-        c.radicals = ctx.radical.select('cid=?', (cid,))
-        for smc in ctx.smc.select('cid=?', (cid,)):
+        c.codepoints = ctx.codepoint.select("cid=?", (cid,))
+        c.radicals = ctx.radical.select("cid=?", (cid,))
+        for smc in ctx.smc.select("cid=?", (cid,)):
             c.stroke_miscounts.append(smc.value)
-        c.variants = ctx.variant.select('cid=?', (cid,))
-        for r in ctx.rad_name.select('cid=?', (cid,)):
+        c.variants = ctx.variant.select("cid=?", (cid,))
+        for r in ctx.rad_name.select("cid=?", (cid,)):
             c.rad_names.append(r.value)
-        c.dic_refs = ctx.dic_ref.select('cid=?', (cid,))
-        c.query_codes = ctx.query_code.select('cid=?', (cid,))
-        for n in ctx.nanori.select('cid=?', (cid,)):
+        c.dic_refs = ctx.dic_ref.select("cid=?", (cid,))
+        c.query_codes = ctx.query_code.select("cid=?", (cid,))
+        for n in ctx.nanori.select("cid=?", (cid,)):
             c.nanoris.append(n.value)
-        c.rm_groups = ctx.rmg.select('cid=?', (cid,))
+        c.rm_groups = ctx.rmg.select("cid=?", (cid,))
         for rmg in c.rm_groups:
-            rmg.readings = ctx.reading.select('gid=?', (rmg.ID,))
-            rmg.meanings = ctx.meaning.select('gid=?', (rmg.ID,))
+            rmg.readings = ctx.reading.select("gid=?", (rmg.ID,))
+            rmg.meanings = ctx.meaning.select("gid=?", (rmg.ID,))
         return c

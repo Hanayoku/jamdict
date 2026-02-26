@@ -8,24 +8,22 @@ Test script for Jamcha SQLite
 # :copyright: (c) 2016 Le Tuan Anh <tuananh.ke@gmail.com>
 # :license: MIT, see LICENSE for more details.
 
+import logging
 import os
 import unittest
-import logging
 
-from jamdict import KanjiDic2SQLite
-from jamdict import KanjiDic2XML
-
+from jamdict import KanjiDic2SQLite, KanjiDic2XML
 
 # -------------------------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------------------------
 
 TEST_DIR = os.path.dirname(os.path.realpath(__file__))
-TEST_DATA = os.path.join(TEST_DIR, 'data')
+TEST_DATA = os.path.join(TEST_DIR, "data")
 if not os.path.isdir(TEST_DATA):
     os.makedirs(TEST_DATA)
-TEST_DB = os.path.join(TEST_DATA, 'jamcha.db')
-MINI_KD2 = os.path.join(TEST_DATA, 'kanjidic2_mini.xml')
+TEST_DB = os.path.join(TEST_DATA, "jamcha.db")
+MINI_KD2 = os.path.join(TEST_DATA, "kanjidic2_mini.xml")
 
 
 def getLogger():
@@ -36,17 +34,19 @@ def getLogger():
 # Test cases
 # -------------------------------------------------------------------------------
 
-class TestJamdictSQLite(unittest.TestCase):
 
+class TestJamdictSQLite(unittest.TestCase):
     db = KanjiDic2SQLite(TEST_DB)
-    ramdb = KanjiDic2SQLite(":memory:", auto_expand_path=False)
-    xdb = KanjiDic2XML.from_file(MINI_KD2)
 
     @classmethod
     def setUpClass(cls):
         if os.path.isfile(TEST_DB):
             getLogger().info("Removing previous database file at {}".format(TEST_DB))
             os.unlink(TEST_DB)
+
+    def setUp(self):
+        self.ramdb = KanjiDic2SQLite(":memory:", auto_expand_path=False)
+        self.xdb = KanjiDic2XML.from_file(MINI_KD2)
 
     def test_xml2sqlite(self):
         print("Test KanjiDic2 - XML to SQLite DB in RAM")
@@ -74,8 +74,8 @@ class TestJamdictSQLite(unittest.TestCase):
             self.assertTrue(c.rm_groups[0].readings)
             self.assertTrue(c.rm_groups[0].meanings)
             # by literal
-            c = db.get_char('持', ctx=ctx)
-            self.assertEqual(c.literal, '持')
+            c = db.get_char("持", ctx=ctx)
+            self.assertEqual(c.literal, "持")
             self.assertTrue(c.rm_groups[0].readings)
             self.assertTrue(c.rm_groups[0].meanings)
 
@@ -90,21 +90,32 @@ class TestJamdictSQLite(unittest.TestCase):
             getLogger().debug("KanjiDic2 meta: {}".format(metas))
             for c in self.xdb:
                 db.insert_char(c, ctx)
-            c = db.get_char('持', ctx=ctx)
+            c = db.get_char("持", ctx=ctx)
             rmg = c.rm_groups[0]
             self.assertEqual(["ジ"], [x.value for x in rmg.on_readings])
-            self.assertEqual(['も.つ', '-も.ち', 'も.てる'], [k.value for k in rmg.kun_readings])
-            self.assertEqual([('chi2', 'pinyin'), ('ji', 'korean_r'), ('지', 'korean_h'), ('Trì', 'vietnam')],
-                             [(x.value, x.r_type) for x in rmg.other_readings])
-            expected = [{'type': 'ja_on', 'value': 'ジ', 'on_type': '', 'r_status': ''},
-                        {'type': 'ja_kun', 'value': 'も.つ', 'on_type': '', 'r_status': ''},
-                        {'type': 'ja_kun', 'value': '-も.ち', 'on_type': '', 'r_status': ''},
-                        {'type': 'ja_kun', 'value': 'も.てる', 'on_type': '', 'r_status': ''},
-                        {'type': 'pinyin', 'value': 'chi2', 'on_type': '', 'r_status': ''},
-                        {'type': 'korean_r', 'value': 'ji', 'on_type': '', 'r_status': ''},
-                        {'type': 'korean_h', 'value': '지', 'on_type': '', 'r_status': ''},
-                        {'type': 'vietnam', 'value': 'Trì', 'on_type': '', 'r_status': ''}]
-            actual = c.rm_groups[0].to_dict()['readings']
+            self.assertEqual(
+                ["も.つ", "-も.ち", "も.てる"], [k.value for k in rmg.kun_readings]
+            )
+            self.assertEqual(
+                [
+                    ("chi2", "pinyin"),
+                    ("ji", "korean_r"),
+                    ("지", "korean_h"),
+                    ("Trì", "vietnam"),
+                ],
+                [(x.value, x.r_type) for x in rmg.other_readings],
+            )
+            expected = [
+                {"type": "ja_on", "value": "ジ", "on_type": "", "r_status": ""},
+                {"type": "ja_kun", "value": "も.つ", "on_type": "", "r_status": ""},
+                {"type": "ja_kun", "value": "-も.ち", "on_type": "", "r_status": ""},
+                {"type": "ja_kun", "value": "も.てる", "on_type": "", "r_status": ""},
+                {"type": "pinyin", "value": "chi2", "on_type": "", "r_status": ""},
+                {"type": "korean_r", "value": "ji", "on_type": "", "r_status": ""},
+                {"type": "korean_h", "value": "지", "on_type": "", "r_status": ""},
+                {"type": "vietnam", "value": "Trì", "on_type": "", "r_status": ""},
+            ]
+            actual = c.rm_groups[0].to_dict()["readings"]
             self.assertEqual(expected, actual)
 
 
