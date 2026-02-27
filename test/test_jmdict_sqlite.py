@@ -9,32 +9,29 @@ Test script for JMDict SQLite
 # :copyright: (c) 2016 Le Tuan Anh <tuananh.ke@gmail.com>
 # :license: MIT, see LICENSE for more details.
 
+import logging
 import os
 import unittest
-import logging
 from pathlib import Path
 
 from chirptext.cli import setup_logging
 
-from jamdict import Jamdict
-from jamdict import JMDictXML
-from jamdict import JMDictSQLite
-
+from jamdict import Jamdict, JMDictSQLite, JMDictXML
 
 # -------------------------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------------------------
 
 TEST_DIR = Path(os.path.realpath(__file__)).parent
-TEST_DATA = TEST_DIR / 'data'
+TEST_DATA = TEST_DIR / "data"
 if not TEST_DATA.exists():
     TEST_DATA.mkdir()
-TEST_DB = TEST_DATA / 'test.db'
-MINI_JMD = TEST_DATA / 'JMdict_mini.xml'
-okashi = 'お菓子'
+TEST_DB = TEST_DATA / "test.db"
+MINI_JMD = TEST_DATA / "JMdict_mini.xml"
+okashi = "お菓子"
 
 
-setup_logging(TEST_DIR / 'logging.json', 'logs')
+setup_logging(TEST_DIR / "logging.json", "logs")
 
 
 def getLogger():
@@ -45,8 +42,8 @@ def getLogger():
 # Test cases
 # -------------------------------------------------------------------------------
 
-class TestJamdictSQLite(unittest.TestCase):
 
+class TestJamdictSQLite(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.db = JMDictSQLite(str(TEST_DB))
@@ -71,7 +68,7 @@ class TestJamdictSQLite(unittest.TestCase):
         # test select entry by id
         e = self.db.get_entry(1001710)
         ejson = e.to_dict()
-        self.assertEqual(ejson['kanji'][0]['text'], 'お菓子')
+        self.assertEqual(ejson["kanji"][0]["text"], "お菓子")
         getLogger().debug(e.to_dict())
 
     def test_import_to_ram(self):
@@ -83,34 +80,40 @@ class TestJamdictSQLite(unittest.TestCase):
 
     def test_import_function(self):
         print("Testing JMDict import function")
-        jd = Jamdict(db_file=":memory:", jmd_xml_file=MINI_JMD, auto_config=False, auto_expand=False)
+        jd = Jamdict(
+            db_file=":memory:",
+            jmd_xml_file=MINI_JMD,
+            auto_config=False,
+            auto_expand=False,
+        )
         jd.import_data()
 
     def test_search(self):
         print("Test searching JMDict SQLite")
-        with self.ramdb.ds.open() as ctx:
+        with self.ramdb.ctx() as ctx:
             self.ramdb.insert_entries(self.xdb, ctx=ctx)
-            entries = ctx.Entry.select()
+            entries = self.ramdb.Entry.select(ctx=ctx)
+            self.assertTrue(len(entries) > 0)
             # Search by kana
-            es = self.ramdb.search('あの', ctx)
+            es = self.ramdb.search("あの", ctx)
             self.assertEqual(len(es), 2)
-            getLogger().info('あの: {}'.format('|'.join([str(x) for x in es])))
+            getLogger().info("あの: {}".format("|".join([str(x) for x in es])))
             # Search by kanji
-            es = self.db.search('%子%', ctx, exact_match=False)
+            es = self.db.search("%子%", ctx, exact_match=False)
             self.assertEqual(len(es), 4)
-            getLogger().info('%子%: {}'.format('|'.join([str(x) for x in es])))
+            getLogger().info("%子%: {}".format("|".join([str(x) for x in es])))
             # search by meaning
-            es = self.db.search('%confections%', ctx, exact_match=False)
+            es = self.db.search("%confections%", ctx, exact_match=False)
             self.assertTrue(es)
-            getLogger().info('%confections%: {}'.format('|'.join([str(x) for x in es])))
+            getLogger().info("%confections%: {}".format("|".join([str(x) for x in es])))
 
     def test_iter_search(self):
         with self.ramdb.open() as ctx:
             self.ramdb.insert_entries(self.xdb, ctx=ctx)
             forms = set()
-            for e in self.ramdb.search_iter("%あの%", iter_mode=True, ctx=ctx):
+            for e in self.ramdb.search_iter("%あの%", ctx=ctx):
                 forms.update(f.text for f in e.kana_forms)
-            expected = {'あのー', 'あのう', 'あの', 'かの', 'あのかた', 'あのひと'}
+            expected = {"あのー", "あのう", "あの", "かの", "あのかた", "あのひと"}
             self.assertTrue(expected.issubset(forms))
 
 
