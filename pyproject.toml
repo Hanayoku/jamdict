@@ -1,11 +1,61 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "jamdict"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.2.0"
+description = "This project is a fork of Jamdict, a Python 3 library for manipulating Jim Breen's JMdict, KanjiDic2, JMnedict and kanji-radical mappings"
 readme = "README.md"
 requires-python = ">=3.13"
+license = "MIT"
+authors = [
+    { name = "Le Tuan Anh", email = "tuananh.ke@gmail.com" }
+]
+keywords = [
+    "dictionary",
+    "japanese",
+    "kanji",
+    "japanese-language",
+    "jmdict",
+    "japanese-study",
+    "kanjidic2",
+    "japanese-dictionary",
+    "jamdict",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Development Status :: 3 - Alpha",
+    "Natural Language :: Japanese",
+    "Natural Language :: English",
+    "Environment :: Plugins",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Topic :: Database",
+    "Topic :: Text Processing :: Linguistic",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "chirptext>=0.1.2",
     "puchikarui>=0.1",
+]
+
+[project.optional-dependencies]
+dev = [
     "pytest>=9.0.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/neocl/jamdict"
+"Bug Tracker" = "https://github.com/neocl/jamdict/issues"
+"Source Code" = "https://github.com/neocl/jamdict/"
+
+[project.scripts]
+jamdict = "jamdict.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["jamdict*"]
+
+[tool.setuptools.package-data]
+jamdict = ["data/*.sql", "data/*.json", "data/*.gz"]
