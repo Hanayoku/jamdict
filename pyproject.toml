@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jamdict"
-version = "0.2.0"
+version = "0.2.1"
 description = "This project is a fork of Jamdict, a Python 3 library for manipulating Jim Breen's JMdict, KanjiDic2, JMnedict and kanji-radical mappings"
 readme = "README.md"
 requires-python = ">=3.13"
