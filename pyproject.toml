@@ -40,11 +40,6 @@ dependencies = [
     "puchikarui>=0.1",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=9.0.2",
-]
-
 [project.urls]
 Homepage = "https://github.com/neocl/jamdict"
 "Bug Tracker" = "https://github.com/neocl/jamdict/issues"
@@ -59,3 +54,8 @@ include = ["jamdict*"]
 
 [tool.setuptools.package-data]
 jamdict = ["data/*.sql", "data/*.json", "data/*.gz"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
