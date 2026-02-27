@@ -13,14 +13,21 @@ __maintainer__ = "Le Tuan Anh"
 # Version configuration (enforcing PEP 440)
 # ------------------------------------------------------------------------------
 __status__ = "3 - Alpha"
-__version_tuple__ = (0, 1, 0, 11, 2)
-__version_status__ = ''  # a specific value ('rc', 'dev', etc.) or leave blank to be auto-filled
+__version_tuple__: tuple[int, ...] = (0, 2, 1, 0, 0)
+__version_status__ = (
+    ""  # a specific value ('rc', 'dev', etc.) or leave blank to be auto-filled
+)
 # ------------------------------------------------------------------------------
-__status_map__ = {'3 - Alpha': 'a', '4 - Beta': 'b', '5 - Production/Stable': '', '6 - Mature': ''}
+__status_map__ = {
+    "3 - Alpha": "a",
+    "4 - Beta": "b",
+    "5 - Production/Stable": "",
+    "6 - Mature": "",
+}
 if not __version_status__:
     __version_status__ = __status_map__[__status__]
 if len(__version_tuple__) == 3:
-    __version_build__ = ''
+    __version_build__ = ""
 elif len(__version_tuple__) == 4:
     __version_build__ = f"{__version_tuple__[3]}"
 elif len(__version_tuple__) == 5:
@@ -32,4 +39,6 @@ if __version_tuple__[2] == 0:
 else:
     __version_main__ = f"{'.'.join(str(n) for n in __version_tuple__[:3])}"
 __version__ = f"{__version_main__}{__version_status__}{__version_build__}"
-__version_long__ = f"{__version_main__} - {__status__.split('-')[1].strip()} {__version_build__}"
+__version_long__ = (
+    f"{__version_main__} - {__status__.split('-')[1].strip()} {__version_build__}"
+)
