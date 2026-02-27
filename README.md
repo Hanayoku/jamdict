@@ -1,10 +1,9 @@
 # Jamdict
 
-[Jamdict](https://github.com/neocl/jamdict) is a Python 3 library for manipulating Jim Breen's JMdict, KanjiDic2, JMnedict and kanji-radical mappings.
+This project is a fork of [Jamdict](https://github.com/neocl/jamdict), a Python 3 library for manipulating Jim Breen's JMdict, KanjiDic2, JMnedict and kanji-radical mappings.
 
-[![ReadTheDocs Badge](https://readthedocs.org/projects/jamdict/badge/?version=latest&style=plastic)](https://jamdict.readthedocs.io/)
+This fork has been updated to support Python 3.13+, while fixing a few bugs along the way.
 
-**Documentation:** https://jamdict.readthedocs.io/ 
 
 # Main features
 
@@ -16,22 +15,9 @@
 * Fast look up (dictionaries are stored in SQLite databases)
 * Command-line lookup tool [(Example)](#command-line-tools)
 
-[Contributors](#contributors) are welcome! 🙇. If you want to help, please see [Contributing](https://jamdict.readthedocs.io/en/latest/contributing.html) page.
-
-# Try Jamdict out
-
-Jamdict is used in [Jamdict-web](https://jamdict.herokuapp.com/) - a web-based free and open-source Japanese reading assistant software.
-Please try out the demo instance online at:
-
-https://jamdict.herokuapp.com/
-
-There also is a demo [Jamdict virtual machine](https://replit.com/@tuananhle/jamdict-demo) online for trying out Jamdict Python code on Repl.it:
-
-https://replit.com/@tuananhle/jamdict-demo
+[Contributors](#contributors) are welcome! 🙇.
 
 # Installation
-
-Jamdict & Jamdict database are both available on [PyPI](https://pypi.org/project/jamdict/) and can be installed using pip
 
 ```bash
 pip install --upgrade jamdict jamdict-data
@@ -192,8 +178,10 @@ See `jamdict_demo.py` and `jamdict/tools.py` for more information.
 
 # Contributors
 
-- [Le Tuan Anh](https://github.com/letuananh) (Maintainer)
+- [Victor Neo](https://github.com/victorneo) (Fork maintainer)
+
+- [Le Tuan Anh](https://github.com/letuananh) (Original Developer)
 - [alt-romes](https://github.com/alt-romes)
 - [Matteo Fumagalli](https://github.com/matteofumagalli1275)
 - [Reem Alghamdi](https://github.com/reem-codes)
-- [Techno-coder](https://github.com/Techno-coder) 
+- [Techno-coder](https://github.com/Techno-coder)
