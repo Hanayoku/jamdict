@@ -1,96 +1,220 @@
-# Peewee Migration Plan: `jmdict_sqlite.py` → `jmdict_peewee.py`
+# Peewee Migration: `jmdict_sqlite.py` → `jmdict_peewee.py` + `jamdict_peewee.py`
+
+## Status
+
+**Phases 1–6 complete.** All 292 tests pass (82 new phase-6 tests + 112 phase-5 tests + 67 phase-4 peewee tests + 31 existing tests).
+
+---
 
 ## Background
 
-`jmdict_sqlite.py` currently uses [puchikarui](https://github.com/letuananh/puchikarui) as its
-database abstraction layer. puchikarui has been unmaintained for over 5 years and `MemorySource`
-(used for `memory_mode=True`) no longer exists in the installed version — meaning that feature is
-silently broken today.
+`jmdict_sqlite.py` uses [puchikarui](https://github.com/letuananh/puchikarui) as its database
+abstraction layer. puchikarui has been unmaintained for over 5 years and `MemorySource` (used for
+`memory_mode=True`) no longer exists in the installed version — meaning that feature is silently
+broken today.
 
-This migration replaces puchikarui with [peewee](https://docs.peewee-orm.com/) in a new parallel
-file `jmdict_peewee.py`, preserving the exact same public interface as `jmdict_sqlite.py` so that
-`util.py` can swap implementations without any changes to the rest of the codebase.
+This migration replaces puchikarui with [peewee](https://docs.peewee-orm.com/) via two new files:
 
-The existing `jmdict_sqlite.py` is left untouched until the new implementation is verified.
+| File | Role |
+|------|------|
+| `jamdict/jmdict_peewee.py` | Low-level store: peewee models + `JMDictDB` class |
+| `jamdict/kanjidic2_peewee.py` | Low-level store: peewee models + `KanjiDic2DB` class |
+| `jamdict/jmnedict_peewee.py` | Low-level store: peewee models + `JMNEDictDB` class |
+| `jamdict/jamdict_peewee.py` | High-level runner: `JamdictPeewee` + `LookupResult` |
 
-`memory_mode` is **not** supported in the peewee implementation. It was already silently broken
-in puchikarui (`MemorySource` does not exist in the installed version) and is out of scope for
-this migration. The `:memory:` path (empty in-memory DB for tests and one-shot imports) is fully
-supported — only the "copy on-disk DB into RAM" behaviour is dropped.
-
----
-
-## Key Differences to Understand Before Starting
-
-### `:memory:` support
-
-`:memory:` — SQLite creates a fresh, empty in-memory database. This is what the tests use; data
-is imported from XML each test run. This continues to work identically in the peewee
-implementation.
-
-### `buckmode` → `peewee atomic()`
-
-The bulk import path in `util.py` calls `ctx.buckmode()` and sets `ctx.auto_commit = False` to
-batch writes. In peewee this becomes a single `database.atomic()` context manager combined with
-PRAGMAs (`journal_mode=MEMORY`, `cache_size`, `temp_store=MEMORY`), which is more idiomatic and
-equally fast.
-
-### Context passing (`ctx=None` pattern)
-
-Every method in `jmdict_sqlite.py` accepts an optional `ctx` argument and recurses with a managed
-context when none is supplied. peewee manages connections at the `Database` object level; explicit
-context passing is not required. However, to keep the public interface identical (so `util.py`
-passes `ctx=` without errors), all public methods will accept and silently ignore a `ctx` keyword
-argument where peewee handles connection management internally.
+The existing `jmdict_sqlite.py` and `util.py` are **left completely untouched**.
 
 ---
 
-## Public Interface Contract
+## Design Decisions
 
-The following is what `jmdict_peewee.py` must expose, matching `jmdict_sqlite.py` exactly:
+### No puchikarui compatibility shims
 
-```python
-class JMDictSQLite:
-    def __init__(self, db_path: str, *args, **kwargs): ...
+Earlier iterations tried to mimic the puchikarui `ExecutionContext` interface
+(`ctx.buckmode()`, `ctx.commit()`, etc.) so the new code could be a drop-in inside the
+existing `util.py`. This proved fragile and unnecessary.
 
-    # Metadata
-    def update_jmd_meta(self, version: str, url: str, ctx=None): ...
+Instead, the new implementation has its own clean public API and its own runner
+(`JamdictPeewee`). `util.py` continues to use the puchikarui path unchanged.
 
-    # Query
-    def all_pos(self, ctx=None) -> list[str]: ...
-    def search(self, query: str, ctx=None, pos=None, **kwargs) -> list[JMDEntry]: ...
-    def search_iter(self, query: str, ctx=None, pos=None, **kwargs) -> Iterator[JMDEntry]: ...
-    def get_entry(self, idseq: int, ctx=None) -> JMDEntry: ...
+### Per-instance database isolation
 
-    # Import
-    def insert_entries(self, entries, ctx=None): ...
-    def insert_entry(self, entry: JMDEntry, ctx=None): ...
+peewee model classes normally share a module-level `database` singleton, which means two
+`JMDictDB` instances would stomp on each other's connection. We solve this with
+`db.bind_ctx(ALL_MODELS)` — a context manager that temporarily routes all model queries
+through a specific `SqliteDatabase` instance without mutating the class-level binding.
 
-    # Table access (used directly in tests and util.py)
-    # self.Entry.select()  →  peewee model select()
-    # self.meta            →  peewee model for Meta table
+Every public method on `JMDictDB` wraps its queries in `self._db.bind_ctx(ALL_MODELS)`, so
+multiple instances (including `:memory:` databases) can coexist safely in the same process.
 
-class JamdictSQLite(JMDictSQLite):
-    """Alias used internally by util.py (lowercase 'd')."""
-    pass
-```
+### jmdict-only scope (for now)
 
-The `self.Entry.select()` and `self.meta` attribute-style access from the test suite will be
-handled by exposing model classes as instance attributes on `JMDictSQLite`.
+`JamdictPeewee` supports JMDict word lookup only. KanjiDic2 and JMNEDict are out of scope
+until the JMDict path is proven in production.
 
 ---
 
-## File Layout After Migration
+## File Layout
 
 ```
 jamdict/jamdict/
-    jmdict_sqlite.py          ← unchanged (puchikarui, kept for comparison)
-    jmdict_peewee.py          ← new file (peewee implementation, same interface)
+    jmdict_sqlite.py          ← unchanged (puchikarui, kept for reference / old tests)
+    jmdict_peewee.py          ← peewee models + JMDictDB (low-level store)
+    kanjidic2_peewee.py       ← peewee models + KanjiDic2DB (low-level store)
+    jmnedict_peewee.py        ← peewee models + JMNEDictDB (low-level store)
+    jamdict_peewee.py         ← JamdictPeewee runner (high-level API)
+    util_old.py               ← original puchikarui-backed Jamdict (renamed from util.py)
+    util.py                   ← new peewee-backed Jamdict with identical public API
 
 jamdict/test/
     test_jmdict_sqlite.py     ← unchanged (existing tests against puchikarui impl)
-    test_jmdict_peewee.py     ← new file (mirrors test_jmdict_sqlite.py exactly,
-                                           imports from jmdict_peewee instead)
+    test_jmdict_peewee.py     ← new tests for JMDictDB + JamdictPeewee (67 tests)
+    test_peewee_phase5.py     ← new tests for KanjiDic2DB + JMNEDictDB + extended JamdictPeewee (112 tests)
+    test_phase6.py            ← parity tests: old vs new Jamdict public API (82 tests)
+```
+
+---
+
+## Public API
+
+### `JMDictDB` (`jmdict_peewee.py`)
+
+Low-level store. Each instance owns its own `SqliteDatabase` connection.
+
+```python
+db = JMDictDB("path/to/jmdict.db")   # or ":memory:"
+
+# Import
+db.insert_entries(list_of_jmdentry)
+db.insert_entry(one_jmdentry)
+
+# Query
+entry  = db.get_entry(1234567)        # → JMDEntry | None
+results = db.search("食べる")          # → list[JMDEntry]
+results = db.search("%食べ%る")        # wildcard LIKE
+results = db.search("id#1234567")     # by idseq
+for e in db.search_iter("食べ%る"):   # memory-efficient iteration
+    print(e)
+
+# Metadata
+db.all_pos()                          # → list[str]
+db.update_meta(version, url)
+db.get_meta("jmdict.version")         # → str | None
+
+# Resource management
+db.close()
+with JMDictDB(":memory:") as db:      # context manager
+    ...
+```
+
+### `KanjiDic2DB` (`kanjidic2_peewee.py`)
+
+Low-level store. Each instance owns its own `SqliteDatabase` connection.
+
+```python
+db = KanjiDic2DB("path/to/kanjidic2.db")   # or ":memory:"
+
+# Import
+db.insert_chars(list_of_character)
+db.insert_char(one_character)
+
+# Query
+char  = db.get_char("持")               # → Character | None
+char  = db.get_char_by_id(42)           # → Character | None
+chars = db.all_chars()                  # → list[Character]
+for c in db.search_chars_iter(["持", "食", "飲"]):
+    print(c)
+
+# Metadata
+db.update_kd2_meta(file_version, database_version, date_of_creation)
+db.get_meta("kanjidic2.file_version")   # → str | None
+
+# Resource management
+db.close()
+with KanjiDic2DB(":memory:") as db:
+    ...
+```
+
+### `JMNEDictDB` (`jmnedict_peewee.py`)
+
+Low-level store. Each instance owns its own `SqliteDatabase` connection.
+
+```python
+db = JMNEDictDB("path/to/jmnedict.db")   # or ":memory:"
+
+# Import
+db.insert_entries(list_of_jmdentry)
+db.insert_entry(one_jmdentry)
+
+# Query
+entry  = db.get_ne(5741815)             # → JMDEntry | None
+results = db.search_ne("神龍")          # → list[JMDEntry]
+results = db.search_ne("%神%")          # wildcard LIKE
+results = db.search_ne("id#5741815")   # by idseq
+for e in db.search_ne_iter("しめ%"):   # memory-efficient iteration
+    print(e)
+
+# Metadata
+db.all_ne_type()                        # → list[str]
+db.update_meta(version, url, date)
+db.get_meta("jmnedict.version")         # → str | None
+
+# Resource management
+db.close()
+with JMNEDictDB(":memory:") as db:
+    ...
+```
+
+### `JamdictPeewee` (`jamdict_peewee.py`)
+
+High-level runner. Owns `JMDictDB`, `KanjiDic2DB`, and `JMNEDictDB` instances lazily.
+
+```python
+jam = JamdictPeewee(
+    db_path="jmdict.db",
+    xml_path="JMdict_e.xml",
+    kd2_db_path="kanjidic2.db",
+    kd2_xml_path="kanjidic2.xml",
+    jmne_db_path="jmnedict.db",
+    jmne_xml_path="JMnedict.xml",
+)
+
+# First run — import from XML (all three, or selectively)
+jam.import_data()                            # all three
+jam.import_data(kanjidic2=False)             # skip KanjiDic2
+jam.import_data(jmdict=False, jmnedict=False) # KanjiDic2 only
+
+# JMDict lookup — result.chars and result.names populated when configured
+result = jam.lookup("食べる")          # → LookupResult
+result = jam.lookup("%食べ%る")        # wildcard
+result = jam.lookup("食べる", pos=["verb"])  # POS filter
+result.entries                        # list[JMDEntry]
+result.chars                          # list[Character]  (KanjiDic2)
+result.names                          # list[JMDEntry]   (JMNEDict)
+bool(result)                          # False when all three are empty
+
+for e in jam.lookup_iter("食べ%る"):   # JMDict iterator
+    print(e)
+
+jam.get_entry(1234567)                # → JMDEntry | None  (JMDict)
+jam.all_pos()                         # → list[str]
+
+# KanjiDic2 accessors (require kd2_db_path)
+jam.get_char("持")                    # → Character | None
+jam.get_char_by_id(42)               # → Character | None
+jam.all_chars()                       # → list[Character]
+
+# JMNEDict accessors (require jmne_db_path)
+jam.get_ne(5741815)                   # → JMDEntry | None
+jam.search_ne("神龍")                 # → list[JMDEntry]
+jam.search_ne_iter("しめ%")           # → Iterator[JMDEntry]
+jam.all_ne_type()                     # → list[str]
+
+# Resource management
+jam.close()
+with JamdictPeewee(db_path=..., xml_path=...) as jam:
+    jam.import_data()
+    jam.lookup("食べる")
 ```
 
 ---
@@ -106,20 +230,12 @@ jamdict/test/
 
 ### Phase 2 — Define Peewee Models in `jmdict_peewee.py`
 
-Create `jamdict/jamdict/jmdict_peewee.py`. The peewee models replace both the `add_table(...)`
-declarations in `JMDictSchema.__init__` and the external `setup_jmdict.sql` DDL file. The `.sql`
-file is **not** modified or deleted yet — that happens only after the migration is verified end
-to end.
+- [x] **2.1** Model classes defined with `database=None` (unbound at module level).
+  Isolation is achieved via `bind_ctx` per method call, not a module-level singleton.
 
-Each table in the current schema maps to one peewee `Model` subclass:
+- [x] **2.2** `_Base(Model)` with `Meta.database = None`.
 
-- [x] **2.1** Define a module-level `database = SqliteDatabase(None)` proxy (deferred init).
-  Using a deferred database means the same model classes work for both file-backed and `:memory:`
-  databases without any additional plumbing.
-
-- [x] **2.2** Define a `BaseModel(Model)` with `Meta.database = database`.
-
-- [x] **2.3** Define the following model classes (one per table):
+- [x] **2.3** All 25 model classes defined:
 
   | Model class        | Table name   | Key fields                                          |
   |--------------------|--------------|-----------------------------------------------------|
@@ -149,153 +265,152 @@ Each table in the current schema maps to one peewee `Model` subclass:
   | `DialectModel`     | `dialect`    | `sid` (FK→Sense), `text`                            |
   | `SenseGlossModel`  | `SenseGloss` | `sid` (FK→Sense), `lang`, `gend`, `text`            |
 
-- [x] **2.4** Write `ALL_MODELS` — a list of all model classes used for `create_tables()` and
-  `drop_tables()` calls.
+- [x] **2.4** `ALL_MODELS` list defined (parent-before-child order for `create_tables`).
 
 ---
 
-### Phase 3 — Implement `JMDictSQLite` class
+### Phase 3 — Implement `JMDictDB` class
 
-- [ ] **3.1** Implement `__init__(self, db_path, *args, **kwargs)`:
-  - If `db_path == ":memory:"`, call `database.init(':memory:')`.
-  - Otherwise call `database.init(db_path)`.
-  - Call `database.connect(reuse_if_open=True)`.
-  - Call `database.create_tables(ALL_MODELS, safe=True)` to create schema if it doesn't exist.
-  - Expose `self.Entry = EntryModel` and `self.meta = MetaModel` as instance attributes so
-    existing call sites like `self.db.Entry.select()` and `self.db.meta.select()` continue to
-    work unchanged.
-
-- [ ] **3.2** Implement `update_jmd_meta(self, version, url, ctx=None)`:
-  - Upsert `jmdict.version` and `jmdict.url` rows in `MetaModel`.
-  - `ctx` is accepted but ignored (peewee manages the connection).
-
-- [ ] **3.3** Implement `all_pos(self, ctx=None) -> list[str]`:
-  - Return `[row.text for row in PosModel.select(PosModel.text).distinct()]`.
-
-- [ ] **3.4** Implement `_build_search_query(self, query, pos=None)`:
-  - Mirror the logic from `jmdict_sqlite.py` exactly:
-    - `id#<n>` → filter by `EntryModel.idseq`.
-    - Wildcard (`%`, `_`, `@`) → use peewee LIKE expressions.
-    - Exact → use `==` expressions.
-    - `pos` filter → additional `idseq IN (subquery on PosModel)`.
-  - Return a peewee `SelectQuery` on `EntryModel` rather than raw SQL strings.
-
-- [ ] **3.5** Implement `search(self, query, ctx=None, pos=None, **kwargs) -> list[JMDEntry]`:
-  - Use `_build_search_query` to get a queryset of `idseq` values.
-  - Call `get_entry(idseq)` for each and return as a list.
-
-- [ ] **3.6** Implement `search_iter(self, query, ctx=None, pos=None, **kwargs)`:
-  - Same as `search` but `yield` each entry instead of collecting into a list.
-
-- [ ] **3.7** Implement `get_entry(self, idseq, ctx=None) -> JMDEntry`:
-  - Reconstruct the full `JMDEntry` domain object from peewee models.
-  - Preserve the N-level assembly (links/bibs/etym/audit → kanji → kana → senses with all
-    sub-tables) exactly as in the existing `get_entry`.
-  - This is the most complex method; see the note on N+1 queries below.
-
-- [ ] **3.8** Implement `insert_entries(self, entries, ctx=None)`:
-  - Wrap in `database.atomic()` for batch performance (replaces `buckmode`).
-  - Iterate and call `insert_entry` for each.
-
-- [ ] **3.9** Implement `insert_entry(self, entry, ctx=None)`:
-  - Mirror the field-by-field insert logic from `jmdict_sqlite.py`.
-  - Use peewee `Model.create(...)` or `Model.insert(...)` calls.
-
-- [ ] **3.10** Add `class JamdictSQLite(JMDictSQLite): pass` at the bottom of the file as an
-  alias (this is what `util.py` actually instantiates).
+- [x] **3.1** `__init__(db_path)` — creates a `SqliteDatabase`, uses `bind_ctx` for init
+  queries (`connect`, `create_tables`, `_seed_meta`).
+- [x] **3.2** `update_meta(version, url)` — upsert via `ON CONFLICT`.
+- [x] **3.3** `get_meta(key)` — point lookup, returns `None` if absent.
+- [x] **3.4** `all_pos()` — `SELECT DISTINCT text FROM pos`.
+- [x] **3.5** `_build_entry_query(query, pos)` — builds peewee `SelectQuery` without executing:
+  - `id#<n>` → filter by `idseq`
+  - wildcard (`%`, `_`, `@`) → `**` operator (SQL `LIKE`)
+  - exact → `==` expressions
+  - `pos` filter → subquery join on `PosModel`
+- [x] **3.6** `search(query, pos)` → `list[JMDEntry]`.
+- [x] **3.7** `search_iter(query, pos)` → `Iterator[JMDEntry]`.
+- [x] **3.8** `get_entry(idseq)` → `JMDEntry | None` — full N-level assembly inside `bind_ctx`.
+- [x] **3.9** `insert_entries(entries)` — bulk insert inside `atomic()` with performance PRAGMAs.
+- [x] **3.10** `insert_entry(entry)` — single insert (delegates to `_insert_entry_unsafe`).
+- [x] **3.11** `close()` + context manager protocol (`__enter__` / `__exit__`).
 
 ---
 
-### Phase 4 — Write `test/test_jmdict_peewee.py`
+### Phase 4 — Implement `JamdictPeewee` runner + tests
 
-Mirror `test/test_jmdict_sqlite.py` exactly. The only changes are:
-
-- [ ] **4.1** Change the import:
-  ```python
-  # from jamdict import JMDictSQLite               ← puchikarui version
-  from jamdict.jmdict_peewee import JMDictSQLite   # peewee version
-  ```
-- [ ] **4.2** Use a separate `TEST_DB` path (`test_peewee.db`) to avoid collisions with the
-  existing test database.
-- [ ] **4.3** Mirror all five test methods with identical assertions:
-  - `test_xml2sqlite` — import XML into file-backed DB, assert entry count and field values.
-  - `test_import_to_ram` — import XML into `:memory:` DB, assert entry count.
-  - `test_import_function` — exercise `Jamdict(db_file=":memory:", ...)` end-to-end import.
-  - `test_search` — kana search, wildcard kanji search, meaning search, assert counts.
-  - `test_iter_search` — iterate `search_iter`, collect kana forms, assert expected subset.
-
----
-
-### Phase 5 — Integration Verification
-
-These steps verify the peewee implementation works as a drop-in inside `util.py` without
-permanently changing `util.py` yet.
-
-- [ ] **5.1** In a local branch / scratch script, temporarily edit `util.py` to import
-  `JamdictSQLite` from `jmdict_peewee` instead of `jmdict_sqlite`, then run the full test suite:
-  ```
-  .venv/bin/python -m pytest test/ -v
-  ```
-- [ ] **5.2** Confirm all tests in `test_jamdict.py` and `test_jmdict_peewee.py` pass.
-- [ ] **5.3** Confirm `test_jmdict_sqlite.py` still passes (i.e. the puchikarui path is unbroken).
+- [x] **4.1** `jamdict_peewee.py` created with `LookupResult` and `JamdictPeewee`.
+- [x] **4.2** `JamdictPeewee.import_data()` — parse XML, bulk insert.
+- [x] **4.3** `JamdictPeewee.lookup(query, pos)` → `LookupResult`.
+- [x] **4.4** `JamdictPeewee.lookup_iter(query, pos)` → `Iterator[JMDEntry]`.
+- [x] **4.5** `JamdictPeewee.get_entry(idseq)` → `JMDEntry | None`.
+- [x] **4.6** `JamdictPeewee.all_pos()` → `list[str]`.
+- [x] **4.7** `test/test_jmdict_peewee.py` written with 67 pytest tests covering:
+  - Import (file-backed + `:memory:` + single entry roundtrip)
+  - `get_entry` (idseq, kanji/kana/gloss/pos/lsource/to_dict)
+  - `search` (exact, wildcard, id#, no-results, pos filter)
+  - `search_iter` (count, kana forms, type checks)
+  - `all_pos` (list, count, no duplicates)
+  - `update_meta` / `get_meta` (upsert, overwrite, missing key, seed on init)
+  - Context manager protocol
+  - `JamdictPeewee` runner (lookup, lookup_iter, get_entry, all_pos, errors)
+  - Multiple concurrent instances (regression for singleton isolation)
 
 ---
 
-### Phase 6 — Cleanup (do after Phase 5 is fully green)
+### Phase 5 — Extend to KanjiDic2 and JMNEDict ✅
 
-These tasks are explicitly deferred until the new implementation is trusted.
-
-- [ ] **6.1** Update `util.py` to import from `jmdict_peewee` permanently.
-- [ ] **6.2** Remove the `MemorySource` / `_MEMORY_MODE` try/except block and all `memory_mode`
-  branching from `util.py`.
-- [ ] **6.3** Update `__init__.py` to export the peewee-backed `JMDictSQLite`.
-- [ ] **6.4** Remove `jmdict_sqlite.py` (or keep it archived).
-- [ ] **6.5** Remove the now-redundant `data/setup_jmdict.sql` DDL file (schema is now defined
-  entirely in the peewee models).
-- [ ] **6.6** Remove the `puchikarui` dependency from `pyproject.toml` (only if no other file
-  still uses it — check `kanjidic2_sqlite.py` and `jmnedict_sqlite.py` which are out of scope
-  for this migration).
-- [ ] **6.7** Update `tools.py` to remove the `puchikarui_version` import and `show_info` output
-  line.
-- [ ] **6.8** Update `PEEWEE_MIGRATION.md` to mark the migration complete.
+- [x] **5.1** Add `KanjiDic2DB` in `kanjidic2_peewee.py` following the same
+  `bind_ctx` pattern.  13 peewee model classes covering all KanjiDic2 tables.
+- [x] **5.2** Add `JMNEDictDB` in `jmnedict_peewee.py`.  8 peewee model classes
+  covering all JMNEDict tables.
+- [x] **5.3** Extend `JamdictPeewee` to accept `kd2_db_path`/`kd2_xml_path` and
+  `jmne_db_path`/`jmne_xml_path`.  `LookupResult` now surfaces `chars` and
+  `names` alongside `entries`.  `import_data()` accepts `jmdict`/`kanjidic2`/
+  `jmnedict` boolean flags to import selectively.
+- [x] **5.4** `test/test_peewee_phase5.py` written with 112 pytest tests covering:
+  - `KanjiDic2DB`: import (file-backed, `:memory:`, single-char roundtrip), `get_char`
+    (literal, by-id, missing, readings, meanings, codepoints, radicals, dic_refs,
+    query_codes, full `to_dict()` roundtrip for every character), reading order,
+    `search_chars_iter`, metadata (seed, update, overwrite, missing key), context
+    manager, multiple concurrent instances
+  - `JMNEDictDB`: import (entry count, `:memory:`, single-entry roundtrip, all idseqs),
+    `get_ne` (kanji/kana/gloss/name_type/to_dict roundtrip, Shenron fixture),
+    `search_ne` (idseq prefix, exact kanji/kana/gloss, wildcard, name_type, no-results,
+    invalid id#), `search_ne_iter`, `all_ne_type`, metadata, context manager, multiple
+    concurrent instances
+  - Extended `JamdictPeewee`: import flags, KanjiDic2/JMNEDict accessors,
+    `RuntimeError` when db not configured, combined `lookup()` populating
+    `result.chars` + `result.names`, `LookupResult.__bool__` via all three fields,
+    `close()` / context manager closing all three DBs, instance isolation
 
 ---
 
-## Notes and Gotchas
+### Phase 6 — Replace `util.py` ✅
+
+- [x] **6.1** Rename the original `util.py` → `util_old.py` (puchikarui path kept
+  intact for reference and for the parity test suite).
+- [x] **6.2** Write a new `util.py` that re-implements the complete `Jamdict` public
+  API backed by `JMDictDB`, `KanjiDic2DB`, and `JMNEDictDB`.
+  - `memory_mode` is accepted for API compatibility but is a **no-op** — the peewee
+    backend does not need pre-loading, and `MemorySource` is broken in recent
+    puchikarui anyway.
+  - `reuse_ctx` / `ctx=` parameters are accepted and silently ignored.
+  - `LookupResult`, `IterLookupResult`, `JMDictXML`, `KanjiDic2XML`, and
+    `JMNEDictXML` are identical copies from `util_old.py` (no DB dependency).
+  - `_MEMORY_MODE = True` exported for any callers that check the flag.
+- [x] **6.3** Update `__init__.py` to import `Jamdict`, `JMDictXML`, `KanjiDic2XML`
+  from the new `util.py` instead of `util_old.py`.
+- [x] **6.4** `jmdict_sqlite.py` / `kanjidic2_sqlite.py` / `jmnedict_sqlite.py` kept
+  for now — they are still referenced by `test_jmdict_sqlite.py`, `test_jmnedict.py`,
+  and `test_kanjidic2_sqlite.py`.  Removal deferred to a follow-up cleanup pass.
+- [ ] **6.5** Remove `data/setup_jmdict.sql` (schema now defined in peewee models).
+- [ ] **6.6** Remove `puchikarui` from `pyproject.toml` after verifying no remaining
+  dependents (`kanjidic2_sqlite.py`, `jmnedict_sqlite.py`).
+- [ ] **6.7** Update `tools.py` to remove `puchikarui_version` output.
+- [x] **6.8** Write `test/test_phase6.py` — 82 parity tests that run every significant
+  public method side-by-side against both backends and assert identical observable
+  output (idseqs, kana/kanji/gloss sets, character literals, name sets, `to_dict()`
+  keys, error types).  Known intentional differences are documented in the test
+  module docstring and tested individually rather than compared.
+- [x] **6.9** Mark migration complete in this file.
+
+#### Intentional behavioural differences from `util_old.py`
+
+| Behaviour | `util_old.py` | new `util.py` |
+|-----------|---------------|---------------|
+| `:memory:` mode | Silently broken (MemorySource removed from puchikarui) | Works correctly |
+| `ready` on `:memory:` | Always `False` (`os.path.isfile` fails) | Returns `True` |
+| `get_entry` / `get_ne` for missing idseq | Returns an empty `JMDEntry` | Returns `None` |
+| `idseq` type on `JMDEntry` | `int` | `str` (normalise with `int(e.idseq)`) |
+| `all_ne_type()` order | Alphabetical (SQLite ORDER BY) | Insertion order |
+| POS string warning logger | `jamdict.jmdict_sqlite` | `jamdict.jmdict_peewee` |
+
+---
+
+## Notes
+
+### `bind_ctx` isolation pattern
+
+Every public method on `JMDictDB` wraps its peewee queries in:
+
+```python
+with self._db.bind_ctx(ALL_MODELS):
+    # queries here run against self._db
+```
+
+This is the only safe way to run multiple `JMDictDB` instances concurrently. A naive
+`db.bind(ALL_MODELS)` permanently mutates the model class and causes the last-created
+instance to steal all queries from earlier instances.
+
+### Wildcard operator
+
+peewee's `**` operator maps to SQL `LIKE` on SQLite. The `%` Python operator is
+arithmetic modulo and must NOT be used. The `.like()` method generates `GLOB` (not
+`LIKE`) and is also wrong for this use case.
 
 ### N+1 queries in `get_entry`
 
-The current `get_entry` fires roughly 15–20 individual SQL queries per entry (one per sub-table).
-For the initial migration, **replicate this behaviour exactly** — correctness over performance.
-Once the test suite is green, `get_entry` can be optimised with peewee `prefetch()` as a
-separate follow-up task.
+`get_entry` fires ~15–20 individual SQL queries per entry. For the initial migration
+this is intentional — correctness over performance. A follow-up optimisation can use
+peewee `prefetch()` once the test suite is stable.
 
 ### Thread safety
 
-puchikarui creates a new `sqlite3` connection per `ExecutionContext`. peewee's default
-`SqliteDatabase` uses a single connection and is not thread-safe by default. If thread safety
-is needed (e.g. in a web context), use `SqliteDatabase(..., check_same_thread=False)` or switch
-to connection pools. For now, match the existing behaviour and document this as a known
-limitation.
-
-### `self.Entry.select()` in tests
-
-`test_xml2sqlite` calls `self.db.Entry.select()` directly to count rows. The peewee
-`EntryModel.select()` returns a `ModelSelect` (lazy). Wrap it in `list()` or call `.count()`
-to materialise. The test asserts `len(entries) == len(self.xdb)` so `list(EntryModel.select())`
-works correctly.
-
-### `ctx` parameter compatibility
-
-`util.py` passes a shared `ctx` object into methods like `search(query, pos=pos, ctx=ctx)` so
-that all queries within a single `lookup()` call share one SQLite connection (for performance
-and consistency). In the peewee implementation `ctx` is ignored — peewee handles connection
-reuse transparently via the `Database` object. Accept `**kwargs` or explicit `ctx=None` on every
-public method signature so call sites don't need to change.
-
-### Deferred database initialisation
-
-Using `SqliteDatabase(None)` (deferred) at module level means the same model classes work for
-both file-backed and `:memory:` databases — which is exactly how the test suite works (one
-file-backed instance, one `:memory:` instance). Call `database.init(path)` inside `__init__`
-before connecting.
+`SqliteDatabase` uses a single connection and is not thread-safe by default. If thread
+safety is needed, use `SqliteDatabase(..., check_same_thread=False)` or switch to
+`SqliteExtDatabase` with connection pools. This is a known limitation documented here
+for future reference.
