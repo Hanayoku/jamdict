@@ -14,19 +14,19 @@ import os
 import unittest
 
 from jamdict.jmdict import JMENDICT_TYPE_MAP
-from jamdict.jmnedict_sqlite import JMNEDictSQLite
-from jamdict.util import JMNEDictXML, JamdictSQLite
+from jamdict.old.jmnedict_sqlite import JMNEDictSQLite
+from jamdict.old.util_old import JamdictSQLite, JMNEDictXML
 
 # -------------------------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------------------------
 
 TEST_DIR = os.path.dirname(os.path.realpath(__file__))
-TEST_DATA = os.path.join(TEST_DIR, 'data')
+TEST_DATA = os.path.join(TEST_DIR, "data")
 if not os.path.isdir(TEST_DATA):
     os.makedirs(TEST_DATA)
-TEST_DB = os.path.join(TEST_DATA, 'jamcha.db')
-MINI_JMNE = os.path.join(TEST_DATA, 'jmendict_mini.xml')
+TEST_DB = os.path.join(TEST_DATA, "jamcha.db")
+MINI_JMNE = os.path.join(TEST_DATA, "jmendict_mini.xml")
 
 
 def getLogger():
@@ -37,38 +37,65 @@ def getLogger():
 # Test cases
 # -------------------------------------------------------------------------------
 
-class TestJMendictModels(unittest.TestCase):
 
+class TestJMendictModels(unittest.TestCase):
     xdb = JMNEDictXML.from_file(MINI_JMNE)
     ramdb = JMNEDictSQLite(":memory:", auto_expand_path=False)
     ramdb = JamdictSQLite(":memory:", auto_expand_path=False)
 
     def extract_fields(self):
-        ''' Test JMnedict XML parser '''
+        """Test JMnedict XML parser"""
         entries = self.xdb.entries
-        expected_idseqs = ['1657560', '2092920', '2831743', '5000000',
-                           '5000001', '5000002', '5000003', '5000004',
-                           '5000005', '5000006', '5000007', '5000008',
-                           '5000009', '5741686', '5723538', '5741815', '5001644']
+        expected_idseqs = [
+            "1657560",
+            "2092920",
+            "2831743",
+            "5000000",
+            "5000001",
+            "5000002",
+            "5000003",
+            "5000004",
+            "5000005",
+            "5000006",
+            "5000007",
+            "5000008",
+            "5000009",
+            "5741686",
+            "5723538",
+            "5741815",
+            "5001644",
+        ]
         idseqs = [e.idseq for e in entries]
         self.assertEqual(expected_idseqs, idseqs)
 
     def test_ne_type_map(self):
-        ''' Test all name_type* '''
-        expected = {'person', 'organization', 'surname', 'company',
-                    'place', 'fem', 'unclass', 'masc', 'given', 'work',
-                    'product', 'ok', 'station'}
+        """Test all name_type*"""
+        expected = {
+            "person",
+            "organization",
+            "surname",
+            "company",
+            "place",
+            "fem",
+            "unclass",
+            "masc",
+            "given",
+            "work",
+            "product",
+            "ok",
+            "station",
+        }
         actual = set(JMENDICT_TYPE_MAP.keys())
         self.assertEqual(expected, actual)
 
     def test_jmne_support(self):
-        ''' Test metadata '''
+        """Test metadata"""
         ramdb = JMNEDictSQLite(":memory:", auto_expand_path=False)
         with ramdb.ctx() as ctx:
             self.ramdb.insert_name_entities(self.xdb, ctx=ctx)
-            m = ctx.meta.select_single('key=?', ('jmnedict.version',))
-            self.assertEqual(m.key, 'jmnedict.version')
-            self.assertEqual(m.value, '1.08')
+            m = ctx.meta.select_single("key=?", ("jmnedict.version",))
+            self.assertEqual(m.key, "jmnedict.version")
+            self.assertEqual(m.value, "1.08")
 
     def test_xml2ramdb(self):
         print("Testing XML to RAM")
@@ -108,28 +135,38 @@ class TestJMendictModels(unittest.TestCase):
                 getLogger().debug(ne.to_dict())
                 self.assertEqual(ne_xml.to_dict(), ne.to_dict())
             # test search by idseq
-            shenron = ramdb.search_ne('id#5741815', ctx=ctx)
+            shenron = ramdb.search_ne("id#5741815", ctx=ctx)
             self.assertEqual(len(shenron), 1)
             self.assertEqual(shenron[0].idseq, 5741815)
             # test exact search
-            shenron2 = ramdb.search_ne('神龍', ctx=ctx)
+            shenron2 = ramdb.search_ne("神龍", ctx=ctx)
             self.assertEqual(len(shenron2), 1)
             self.assertEqual(shenron2[0].idseq, 5741815)
             # test search by kana
-            shenron3 = ramdb.search_ne('シェンロン', ctx=ctx)
+            shenron3 = ramdb.search_ne("シェンロン", ctx=ctx)
             self.assertEqual(len(shenron3), 1)
             self.assertEqual(shenron3[0].idseq, 5741815)
             # test search by definition
-            shenron4 = ramdb.search_ne('%spiritual%', ctx=ctx)
+            shenron4 = ramdb.search_ne("%spiritual%", ctx=ctx)
             self.assertEqual(len(shenron4), 1)
             self.assertEqual(shenron4[0].idseq, 5741815)
             # test search by wild card
-            all_shime_names = ramdb.search_ne('しめ%', ctx=ctx)
-            expected_idseqs = [5000001, 5000002, 5000003, 5000004, 5000005, 5000006, 5000007, 5000008, 5000009]
+            all_shime_names = ramdb.search_ne("しめ%", ctx=ctx)
+            expected_idseqs = [
+                5000001,
+                5000002,
+                5000003,
+                5000004,
+                5000005,
+                5000006,
+                5000007,
+                5000008,
+                5000009,
+            ]
             actual = [x.idseq for x in all_shime_names]
             self.assertEqual(expected_idseqs, actual)
             # test search by name_type
-            all_fems = ramdb.search_ne('person', ctx=ctx)
+            all_fems = ramdb.search_ne("person", ctx=ctx)
             expected_idseqs = [2831743, 5001644]
             actual = [x.idseq for x in all_fems]
             self.assertEqual(expected_idseqs, actual)
@@ -138,7 +175,7 @@ class TestJMendictModels(unittest.TestCase):
         ramdb = JMNEDictSQLite(":memory:", auto_expand_path=False)
         ctx = ramdb.ctx()
         ramdb.insert_name_entities(self.xdb, ctx=ctx)
-        shenron = ctx.search_ne('id#5741815', ctx=ctx)[0]
+        shenron = ctx.search_ne("id#5741815", ctx=ctx)[0]
         self.assertTrue(shenron)
 
 

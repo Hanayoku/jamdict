@@ -17,10 +17,10 @@ import os
 
 from puchikarui import Schema
 
-from . import __url__ as JAMDICT_URL
-from . import __version__ as JAMDICT_VERSION
-from .jmdict import Meta
-from .kanjidic2 import (
+from .. import __url__ as JAMDICT_URL
+from .. import __version__ as JAMDICT_VERSION
+from ..jmdict import Meta
+from ..kanjidic2 import (
     Character,
     CodePoint,
     DicRef,
@@ -37,7 +37,7 @@ from .kanjidic2 import (
 # ------------------------------------------------------------------------------
 
 MY_FOLDER = os.path.dirname(os.path.abspath(__file__))
-SCRIPT_FOLDER = os.path.join(MY_FOLDER, "data")
+SCRIPT_FOLDER = os.path.join(os.path.dirname(MY_FOLDER), "data")
 KANJIDIC2_VERSION = "1.6"
 KANJIDIC2_URL = "https://www.edrdg.org/wiki/index.php/KANJIDIC_Project"
 KANJIDIC2_DATE = "April 2008"

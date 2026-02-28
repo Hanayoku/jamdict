@@ -37,7 +37,10 @@ classifiers = [
 ]
 dependencies = [
     "chirptext>=0.1.2",
+    "jamdict-data>=1.5",
+    "peewee>=4.0.0",
     "puchikarui>=0.1",
+    "types-peewee>=4.0.0.20260223",
 ]
 
 [project.urls]
@@ -57,5 +60,6 @@ jamdict = ["data/*.sql", "data/*.json", "data/*.gz"]
 
 [dependency-groups]
 dev = [
+    "ipython>=9.10.0",
     "pytest>=9.0.2",
 ]
