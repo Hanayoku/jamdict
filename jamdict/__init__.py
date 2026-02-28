@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-'''
+"""
 Python library for manipulating Jim Breen's JMdict and KanjiDic2
 Latest version can be found at https://github.com/neocl/jamdict
 
@@ -18,7 +18,7 @@ References:
 
 @author: Le Tuan Anh <tuananh.ke@gmail.com>
 @license: MIT
-'''
+"""
 
 # Copyright (c) 2016, Le Tuan Anh <tuananh.ke@gmail.com>
 #
@@ -42,14 +42,45 @@ References:
 
 ########################################################################
 
+# Unpack __version__ symbols into this package namespace FIRST.
+# Modules inside the old/ subpackage do:
+#   from .. import __url__
+#   from .. import __version__
+# at module scope, so __url__ and __version__ must already exist as attributes
+# on this package object when "from . import old" triggers their loading below.
 from . import __version__ as version_info
-from .__version__ import __author__, __email__, __copyright__, __maintainer__
-from .__version__ import __credits__, __license__, __description__, __url__
-from .__version__ import __version__, __version_long__, __status__
+from .__version__ import (
+    __author__,
+    __copyright__,
+    __credits__,
+    __description__,
+    __email__,
+    __license__,
+    __maintainer__,
+    __status__,
+    __url__,
+    __version__,
+    __version_long__,
+)
 
-from .jmdict_sqlite import JMDictSQLite
-from .kanjidic2_sqlite import KanjiDic2SQLite
-from .util import Jamdict, JMDictXML, KanjiDic2XML
+# Now that __url__ and __version__ are in this namespace, import old/.
+from . import old
 from .krad import KRad
-__all__ = ['Jamdict', 'JMDictSQLite', 'JMDictXML', 'KanjiDic2SQLite', 'KanjiDic2XML', 'KRad',
-           "__version__", "__author__", "__description__", "__copyright__", "version_info"]
+from .old.jmdict_sqlite import JMDictSQLite
+from .old.kanjidic2_sqlite import KanjiDic2SQLite
+from .util import Jamdict, JMDictXML, KanjiDic2XML
+
+__all__ = [
+    "Jamdict",
+    "JMDictSQLite",
+    "JMDictXML",
+    "KanjiDic2SQLite",
+    "KanjiDic2XML",
+    "KRad",
+    "old",
+    "__version__",
+    "__author__",
+    "__description__",
+    "__copyright__",
+    "version_info",
+]

@@ -2,7 +2,7 @@
 
 This project is a fork of [Jamdict](https://github.com/neocl/jamdict), a Python 3 library for manipulating Jim Breen's JMdict, KanjiDic2, JMnedict and kanji-radical mappings.
 
-This fork has been updated to support Python 3.13+, while fixing a few bugs along the way.
+This fork has been updated to support Python 3.13+ and has migrated from using `puchikarui` to `peewee` for DB operations. All public APIs stay the same and should operate the same.
 
 
 # Main features
@@ -155,7 +155,7 @@ Find the word 花火 by idseq (1194580)
 
 ```python
 >>> result = jam.lookup('id#1194580')
->>> print(result.names[0])
+>>> print(result.entries[0])
 [id#1194580] はなび (花火) : fireworks ((noun (common) (futsuumeishi)))
 ```
 

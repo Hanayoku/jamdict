@@ -13,9 +13,9 @@ import os
 
 from puchikarui import Schema
 
-from . import __url__ as JAMDICT_URL
-from . import __version__ as JAMDICT_VERSION
-from .jmdict import (
+from .. import __url__ as JAMDICT_URL
+from .. import __version__ as JAMDICT_VERSION
+from ..jmdict import (
     Audit,
     BibInfo,
     EntryInfo,
@@ -34,7 +34,7 @@ from .jmdict import (
 # -------------------------------------------------------------------------------
 
 MY_FOLDER = os.path.dirname(os.path.abspath(__file__))
-SCRIPT_FOLDER = os.path.join(MY_FOLDER, "data")
+SCRIPT_FOLDER = os.path.join(os.path.dirname(MY_FOLDER), "data")
 JMDICT_SETUP_FILE = os.path.join(SCRIPT_FOLDER, "setup_jmdict.sql")
 JMDICT_VERSION = "1.08"
 JMDICT_URL = "http://www.csse.monash.edu.au/~jwb/edict.html"
