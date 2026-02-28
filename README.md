@@ -155,7 +155,7 @@ Find the word 花火 by idseq (1194580)
 
 ```python
 >>> result = jam.lookup('id#1194580')
->>> print(result.names[0])
+>>> print(result.entries[0])
 [id#1194580] はなび (花火) : fireworks ((noun (common) (futsuumeishi)))
 ```
 
